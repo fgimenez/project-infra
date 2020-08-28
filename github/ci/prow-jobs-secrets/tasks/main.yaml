@@ -1,0 +1,7 @@
+- include_role:
+    name: kubernetes_crud
+  vars:
+    steps: "{{ deploy_steps }}"
+    default_kubeconfig_path: "{{ automationKubeconfig }}"
+    default_context:  '{{ masterClusterContext }}'
+    default_namespace: '{{ prowNamespace }}'
