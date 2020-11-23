@@ -2,9 +2,11 @@
   tasks:
     - set_fact:
         deploy_environment: '{{ lookup("env", "DEPLOY_ENVIRONMENT") }}'
-    - fail:
+    - name: Check DEPLOY_ENVIRONMENT env var
+      fail:
         msg: DEPLOY_ENVIRONMENT must be set
       when: deploy_environment is undefined or deploy_environment == ""
+
     - set_fact:
         local_project_infra_root: '{{ playbook_dir}}/../../../../../'
     - set_fact:
@@ -22,6 +24,34 @@
         rsync_opts:
           - "--exclude=.git"
           - "--exclude=venv"
+
+    - set_fact:
+        github_token: '{{ lookup("env", "GITHUB_TOKEN") }}'
+    - name: Check GITHUB_TOKEN env var
+      fail:
+        msg: GITHUB_TOKEN must be set
+      when: github_token is undefined or github_token == ""
+
+    - set_fact:
+        secrets_dir: '{{ project_infra_root }}/github/ci/prow-deploy/kustom/environments/{{ deploy_environment }}/secrets/'
+
+    - name: Create secrets dir
+      file:
+        path: '{{ secrets_dir }}'
+        state: directory
+
+    - set_fact:
+        oauth_secret_dir: '{{ secrets_dir}}/oauth-token'
+
+    - name: Create oauth secret dir
+      file:
+        path: '{{ oauth_secret_dir }}'
+        state: directory
+
+    - name: Create github token secret
+      copy:
+        content: '{{ github_token }}'
+        dest: '{{ oauth_secret_dir }}/oauth'
 
     - name: Include staging config
       include_vars:
@@ -54,3 +84,17 @@
         chdir: "{{ kubevirtci_dir }}"
       environment: "{{ shell_environment }}"
       when: "'kubevirtci' in deploy_environment"
+
+    - set_fact:
+        kubeconfig_secret_dir: '{{ secrets_dir}}/kubeconfig'
+
+    - name: Create kubeconfig secret dir
+      file:
+        path: '{{ kubeconfig_secret_dir }}'
+        state: directory
+
+    - name: Create kubeconfig secret
+      copy:
+        src: '{{ kubeconfig_path }}'
+        dest: '{{ kubeconfig_secret_dir }}/config'
+        remote_src: true
