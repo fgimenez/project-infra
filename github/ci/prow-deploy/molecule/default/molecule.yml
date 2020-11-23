@@ -1,17 +1,18 @@
 ---
 driver:
-  name: delegated
+  name: docker
 
 platforms:
   - name: instance  # must be able to `ssh host`, edit your ~/.ssh/config
-    options:
-      managed: False
+    image: kubevirtci/bootstrap:v20201119-a5880e0
+    privileged: True
 
 provisioner:
   name: ansible
 
 scenario:
   test_sequence:
+    - create
     - prepare
     - converge
     - verify
