@@ -1,3 +1,164 @@
+# Kubevirt Prow deployment
+
+Prow is normally deployed from test-infra repository against the
+kubernetes infrastructure
+In kubevirt case, we are using some manifests from the prow deployment
+and some manifests to deploy prow in three different environment
+
+- kubevirtci-testing
+
+Is the testing environment to test prow both locally or on automatic jobs.
+It uses a cluster created by kubvirtci as target to deploy prow
+
+- ibmcloud-staging
+
+Is the staging environment to test prow alongside production.
+It uses the cluster in ibmcloud, but with changes in naming and paths to not
+interfere with production deployment
+
+- ibmcloud-production
+
+Is the production environment. This is the default environment for production
+deployment. A deployment on this environment will affect real jobs
+
+## How to launch a deployment
+
+To launch deployment three tools are needed
+
+- kustomize
+
+Generates manifests from a base, applying a set of patches
+
+- yq
+
+Command line tool to handle yaml files
+
+- kubectl
+
+### Install dependencies
+
+Version 3 of kustomize is needed.
+
+    GOBIN=$(pwd)/ GO111MODULE=on go get sigs.k8s.io/kustomize/kustomize/v3
+    
+Or you can follow instructions at https://kubectl.docs.kubernetes.io/installation/kustomize/source/
+
+The install yq. Please be aware that there is another yq written in python
+with the same goal, but it doesn't support patch scripting and it's not usable here.
+
+    GO111MODULE=on go get github.com/mikefarah/yq/v3
+    
+yq (the one in go, not the one in python)
+
+### Generate configuration
+
+Before being able to generate the ConfigMaps with kustomize, we need to generate
+environment specific configuration from the base configuration. This is done
+separately with yq as kustomize deals with kubernetes manifests only, not generic yaml files.
+
+There's a script in the base kustom directory to automate this.
+
+    kustom/render-environment-configs.sh <environment>
+
+Will apply patches to the configuration as defined in the patch script for the environment in 
+
+    kustom/environments/$environment/yq_scripts
+    
+then renders the yaml configurations, then copy them to the environment directory at
+
+    kustom/environments/$environment/configs
+
+### Copy the secrets
+
+Before being able to generate the secrets with kustomize, we need to copy them in the 
+proper environment directory at
+
+    kustom/environments/$environment/secrets
+    
+All the secrets needed are contained under the directory
+
+    kustom/secrets-boilerplate
+
+Copy the whole subtree to the environment dir then fill out all your secret.
+No code should be pushed as PR which contains environment specific secrets.
+As an additional security measure, the environment specific secret directories are
+ignored explicity with a .gitignore.
+
+### Generate manifests
+
+When configuration and secrets are in place in the environment specific directories,
+we can finally call kustomize to generate environment specific manifests:
+
+    ~/go/bin/kustomize build kustom/environments/$environment > prow-deploy.yaml
+
+WARNING: There is a version of kustomize that is embedded in kubectl, but it's not the version
+required by this deployment, so don't use it.
+
+After the manifests are rendered without errors, you can directly apply them with kubectl
+
+    kubectl apply -f prow-deploy.yaml
+
+## Kustomize structure
+
+The kustomize structure is contained under the kustom directory inside prow-deploy role.
+
+- base
+
+Contains the base configurations and manifests
+
+- base/kustomization.yaml
+
+Contains the list of resources utilized in the prow deployment. Only manifests
+specified here will be included in the final kustomized rendering.
+
+- base/manifests/test-infra
+
+Contains an exact copy of the prow manifests from the test-infra repository.
+They will be in a directory named as the git SHA from where they were pulled from
+
+- base/manifests/local
+
+Will contain the manifests created specifically for the kubevirt prow deployment.
+
+- base/config
+
+Will contain the base yaml configuration files for the deployments. They are under
+a timestamped directory to make config versioning easier.
+
+- environments
+
+Will contain the environment specific configurations and patches.
+
+- environments/$environment/configs
+
+Will contain the rendered configurations
+
+- environments/$environment/secrets
+
+Will contain the copied secrets.
+
+- environment/$environment/yq_scripts
+
+Contains patch scripts for the yq tool, to modify base configuration files
+
+- environment/$environment/patches
+
+Contains the patches to modify base manifests, divided per patch type.
+
+### Kustomize patches
+
+The main target of kustomization are names and namespaces, and generating
+resources to not conflict with production.
+So the patches are focusing on namespaces and changing paths.
+The option "namespace" offered by customize cannot be used here, as it works
+well only when there's a single namespace to be considered, and overrides ALL
+namespaces present.
+The option "prefix" is used in staging environmenmt, but it's not enough as some
+resources configuration retain the old names.
+
+
+## Testing
+
 # Prow deployment role
 
 This role deploys prow in a kubernetes cluster created using kubevirt-ci
@@ -7,67 +168,12 @@ the staging cluster to upload the manifests.
 
 ## Role structure
 
-From the role root directory
-
-    defaults/main.yaml
-
-Contains a few variable useful for the deployment, but most importantly the
-list of manifest to upload for the prow deployment. The list references
-manifest location in other parts of the role tree and is directly passed
-as input to kubernetes_crud role
-
-    files/
-    
-Is the directory containing static configuration files 
-
-    files/manifests
-    
-Contain static manifests.
-
-    files/jobs
-    
-Is a symbolic link to the job configuration sub-tree already existing under
-the "prow" role
-
-    templates/manifests
-    
-Contains parametrized manifests that will be rendered by kubernetes_crud
-role using variables passed to the role.
-    
     molecule/default
     
 Contains the main scenario for local or automated testing.
 
-Beside passing manifests as steps, the role performs small setup/cleanup
+Beside invoking kustomize, the role performs small setup/cleanup
 tasks, primarily passing variables around.
-
-## How to launch a deployment
-
-First you need to create a deployment configuration file.
-The role will look by default in
-
-    /etc/prow-deploy/deploy_config.yaml
-    
-An example can be found in directory
-
-    molecule/default/vars/deploy_config.yaml
-    
-be sure to specify a githubToken.
-    
-When the configuration is in place launch
-
-    cd /path/to/project-infra/github/ci/
-    ansible-playbook -v prow-deploy/prow-deploy.yaml
-    
-to use the default config location, or:
-    
-
-    ansible-playbook -v prow-deploy/prow-deploy.yaml -e deploy_config_path=/path/to/deploy_config.yaml
-    -- OR --
-    export DEPLOY_CONFIG_PATH=/path/to/deploy.yaml
-    ansible-playbook -v prow-deploy/prow-deploy.yaml 
-
-To specify a different location
 
 ## How to test the role
 
@@ -95,15 +201,13 @@ service will try to access github using the token before starting.
 Create a github token for your account, with at most read:user scope. Any
 additional permission will make the test environment interfere with the production
 repositories, like adding automatic comments.
-Put you token into a yaml file e.g.
+Fill the secret as plain text in 
 
-    cat > /tmp/token_file.yaml << EOF
-    githubToken: 2391rj0lvksldkfj0-w9ejgpkljvblskgj
-    EOF
-   
-Then start deployment by passing the file as extra args file
+    kustom/environments/$environment/secrets/oauth-token/oauth
 
-    molecule converge -- -e @/tmp/token_file.yaml
+Then start deployment with
+
+    molecule converge
     
 This will launch the prow deployment itself, will wait for the deployment
 to settle and then will collect some information in the
@@ -134,11 +238,6 @@ Will tear down the kubevirt ci cluster completely
     molecule test
     
 Will launch all the above step automatically in sequence.
-If you need to launch test with a different deploy config, you need to
-export an environment variable instead
-
-    export DEPLOY_CONFIG_PATH=/path/to/config
-    molecule test
 
 
 ## How to debug the services in live cluster
