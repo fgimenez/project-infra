@@ -5,6 +5,23 @@
     - fail:
         msg: DEPLOY_ENVIRONMENT must be set
       when: deploy_environment is undefined or deploy_environment == ""
+    - set_fact:
+        local_project_infra_root: '{{ playbook_dir}}/../../../../../'
+    - set_fact:
+        project_infra_root: /workspace/repos/project-infra-master
+
+    - name: create project-infra dir
+      file:
+        path: '{{ project_infra_root }}'
+        state: directory
+
+    - name: upload project-infra files
+      synchronize:
+        src: '{{ local_project_infra_root }}'
+        dest: '{{ project_infra_root }}'
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=venv"
 
     - name: Include staging config
       include_vars:
