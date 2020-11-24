@@ -4,7 +4,7 @@ metadata:
   name: docker-daemon-mirror-config
 data:
   docker: |
-{{ dockerDaemonConfig | indent(width=4, indentfirst=True) }}
+{{ lookup('file', '{{ manifest_base }}/files/docker-daemon-mirror.conf' ) | indent(width=4, indentfirst=True) }}
 
   docker-proxy: |
-{{ dockerDaemonProxyConfig | indent(width=4, indentfirst=True) }}
+{{ lookup('file', '{{ manifest_base }}/files/docker-daemon-mirror-proxy.conf' ) | indent(width=4, indentfirst=True) }}

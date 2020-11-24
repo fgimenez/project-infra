@@ -1,0 +1,7 @@
+deploy_steps:
+  - desc: Add admins to the prow job namespace
+    manifest_template: "/templates/admin-rbac.yaml"
+  - desc: Deploy job limit range
+    manifest: "/files/memory-job-defaults.yaml"
+  - desc: Update the docker mirror daemon config
+    manifest_template: "templates/docker-daemon-mirror-config.yaml"
