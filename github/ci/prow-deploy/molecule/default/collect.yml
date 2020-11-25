@@ -34,8 +34,7 @@
 - name: Describe all in a single yaml.
   shell: |
     {{ kubectl_prow }} get all -o yaml > {{ artifacts_dir }}/get_all.yaml
-  environment:
-    KUBEVIRTCI_TAG: 2010091151-ea2c81d
+  environment: "{{ shell_environment }}"
 
 - name: collect opened port
   shell: |
@@ -44,8 +43,7 @@
 - name: collect port mapping
   shell: |
     {{ kubevirtci_dir }}/cluster-up/cli.sh ports > {{ artifacts_dir }}/port-map.txt
-  environment:
-    KUBEVIRTCI_TAG: 2010091151-ea2c81d
+  environment: "{{ shell_environment }}"
 
 - name: Compress yaml
   archive:
@@ -61,4 +59,3 @@
   loop_control:
     loop_var: resource
     label: "{{ resource.key }}"
-
