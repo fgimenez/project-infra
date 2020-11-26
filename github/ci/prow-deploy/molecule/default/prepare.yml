@@ -1,7 +1,7 @@
 - hosts: instance
   tasks:
     - set_fact:
-        deploy_environment: '{{ lookup("env", "DEPLOY_ENVIRONMENT") }}'
+        deploy_environment: '{{ lookup("env", "DEPLOY_ENVIRONMENT") | default("kubevirtci-testing")}}'
     - name: Check DEPLOY_ENVIRONMENT env var
       fail:
         msg: DEPLOY_ENVIRONMENT must be set
@@ -50,7 +50,7 @@
 
     - name: Create github token secret
       copy:
-        content: '{{ github_token }}'
+        content: '{{ lookup("file", github_token) }}'
         dest: '{{ oauth_secret_dir }}/oauth'
 
     - set_fact:
