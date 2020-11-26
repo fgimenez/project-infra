@@ -122,3 +122,48 @@ presubmits:
               memory: "8Gi"
             limits:
               memory: "8Gi"
+  - name: prow-deploy-test
+    always_run: false
+    run_if_changed: "github/ci/prow-deploy/.*"
+    decorate: true
+    labels:
+      preset-dind-enabled: "true"
+      preset-docker-mirror-proxy: "true"
+    spec:
+      containers:
+        - image: kubevirtci/bootstrap:v20201119-a5880e0
+          env:
+          - name: GOOGLE_APPLICATION_CREDENTIALS
+            value: /etc/gcs/service-account.json
+          - name: GITHUB_TOKEN
+            value: /etc/github/oauth
+          command:
+            - "/usr/local/bin/runner.sh"
+            - "/bin/bash"
+            - "-c"
+            - "cd github/ci/prow-deploy/ &&
+               python3 -m venv venv &&
+               source venv/bin/activate &&
+               pip install -r requiremenets.txt &&
+               molecule test"
+          # docker-in-docker needs privileged mode
+          securityContext:
+            privileged: true
+          resources:
+            requests:
+              memory: "9Gi"
+            limits:
+              memory: "9Gi"
+          volumeMounts:
+          - name: token
+            mountPath: /etc/github
+          - name: gcs
+            mountPath: /etc/gcs
+            readOnly: true
+      volumes:
+      - name: token
+        secret:
+          secretName: oauth-token
+      - name: gcs
+        secret:
+          secretName: gcs
