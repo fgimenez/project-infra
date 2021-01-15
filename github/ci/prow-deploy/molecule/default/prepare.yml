@@ -1,5 +1,11 @@
 - hosts: instance
   tasks:
+    - name: download kind
+      get_url:
+        url: https://github.com/kubernetes-sigs/kind/releases/download/v0.9.0/kind-linux-amd64
+        dest: /usr/local/bin/kind
+        mode: a+x
+
     - name: set deploy environment
       set_fact:
         deploy_environment: 'kubevirtci-testing'
@@ -30,20 +36,9 @@
         /usr/local/bin/start_dind.sh
       changed_when: false
 
-    - name: Shallow Clone kubevirtci repo
-      git:
-        repo: https://github.com/kubevirt/kubevirtci.git
-        dest: "{{ kubevirtci_dir }}"
-        depth: 1
-        refspec: "+refs/heads/master:refs/remotes/origin/master"
-      when: "'kubevirtci' in deploy_environment"
-
-    - name: Launch kubevirtci cluster
-      command: make cluster-up
+    - name: Launch cluster
+      command: kind create cluster
       changed_when: false
-      args:
-        chdir: "{{ kubevirtci_dir }}"
-      environment: "{{ shell_environment }}"
       when: "'kubevirtci' in deploy_environment"
 
     - name: set secrets dir

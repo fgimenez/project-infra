@@ -1,6 +1,21 @@
 FROM {{ item.image }}
 
 RUN printf '#!/bin/bash\n\
+echo "Enabling IPV6 for Docker."\n\
+# configure the daemon with ipv6\n\
+mkdir -p /etc/docker/\n\
+cat <<EOF >/etc/docker/daemon.json\n\
+{\n\
+  "ipv6": true,\n\
+  "fixed-cidr-v6": "fc00:db8:1::/64",\n\
+}\n\
+EOF\n\
+# enable ipv6\n\
+sysctl net.ipv6.conf.all.disable_ipv6=0\n\
+sysctl net.ipv6.conf.all.forwarding=1\n\
+# enable ipv6 iptables\n\
+modprobe -v ip6table_nat\n\
+\n\
 echo "Docker in Docker enabled, initializing..."\n\
 printf '=%.0s' {1..80}; echo\n\
 # If we have opted in to docker in docker, start the docker daemon,\n\
